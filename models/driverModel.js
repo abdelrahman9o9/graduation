@@ -5,23 +5,37 @@ const driverSchema = new mongoose.Schema({
     type: String,
     default: 'default profile.png',
   },
-  drivername: {
+  name: {
     type: String,
-    required: true,
+    required: [true, 'p;ease provide a name'],
   },
-  driveremail: {
+  email: {
     type: String,
-    required: true,
+    required: [true, 'p;ease provide a email'],
     unique: true,
   },
-  driverphone: {
+  password: {
     type: String,
-    required: true,
+    required: [true, 'p;ease provide a password'],
+    minlength: 8,
+    select: false,
+  },
+  phone: {
+    type: String,
+    required: [true, 'p;ease provide a phone'],
     unique: true,
   },
   status: {
     type: Boolean,
     default: false,
+  },
+  passwordChangedAt: Date,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+  active: {
+    type: Boolean,
+    default: true,
+    select: false,
   },
 });
 

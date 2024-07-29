@@ -1,8 +1,7 @@
 const express = require('express');
-
 const driverController = require('../controllers/driverController');
-
 const router = express.Router();
+const authController = require('../controllers/authController');
 
 // Password management routes
 router.post('/forgotPassword', driverController.forgotPassword);
@@ -10,10 +9,13 @@ router.patch('/resetPassword/:token', driverController.resetPassword);
 router.patch('/updateMyPassword', driverController.updatePassword);
 
 // Authentication routes
+//router.use(authController.protect);
+
 router.post('/register', driverController.registerDriver);
 router.post('/login', driverController.loginDriver);
 router.get('/logout', driverController.logoutDriver);
-//
+//router.use(authController.protect);
+
 // User profile routes
 router.patch(
   '/updateMe',

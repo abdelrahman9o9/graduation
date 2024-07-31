@@ -1,5 +1,8 @@
 const app = require('./app');
 const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+
+dotenv.config({ path: './config.env' });
 
 const dbURL =
   'mongodb+srv://abdokanoon:vbdDrbXZ4uqh0s4u@cluster0.bjajwf5.mongodb.net/TukRide?retryWrites=true&w=majority&appName=Cluster0';

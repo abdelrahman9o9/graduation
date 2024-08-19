@@ -115,25 +115,26 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   }
 
   //2) Generate the random reset token
-  const resetToken = driver.createPasswordResetToken();
+  const resetCode = driver.createPasswordResetToken();
   await driver.save({ validateBeforeSave: false });
+
   //3) Send it to driver email
   const resetURL = `${req.protocol}://${req.get(
     'host'
-  )}/driver/resetPassword/${resetToken}`;
+  )}/driver/resetPassword/${resetCode}`;
 
   const message = `Forgot your password? Submit a PATCH request with your new password and passwordConfirm to:${resetURL}.\nIf you did not forget your password ,please ignore this email!`;
 
   try {
     await sendEmail({
       email: driver.email,
-      subject: 'Your Password reset token (valid for 10 min )',
+      subject: 'Your Password reset code (valid for 10 min )',
       message,
     });
 
     res.status(200).json({
       status: 'success',
-      message: 'Token sent to email',
+      message: 'Code sent to email',
     });
   } catch (err) {
     console.error('Error sending email:', err); // Log the error
@@ -149,20 +150,53 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   }
 });
 
+exports.verifyResetCode = catchAsync(async (req, res, next) => {
+  // 1) Get the reset code from the request body
+  const { resetCode } = req.body;
+
+  // 2) Check if the reset code is provided
+  if (!resetCode) {
+    return next(new AppError('Please provide the reset code.', 400));
+  }
+
+  // 3) Hash the reset code (since it was hashed when storing)
+  const hashedCode = crypto
+    .createHash('sha256')
+    .update(resetCode)
+    .digest('hex');
+
+  // 4) Find the driver with the hashed code and check if it is not expired
+  const driver = await Driver.findOne({
+    passwordResetToken: hashedCode,
+    passwordResetExpires: { $gt: Date.now() },
+  });
+
+  // 5) If no driver is found, or the token is expired
+  if (!driver) {
+    return next(new AppError('Invalid or expired reset code.', 400));
+  }
+
+  // 6) If the code is valid, respond with success
+  res.status(200).json({
+    status: 'success',
+    message: 'Reset code is valid.',
+  });
+});
+
 exports.resetPassword = catchAsync(async (req, res, next) => {
-  // 1) Get driver based on the token
-  const hashedToken = crypto
+  // 1) Get driver based on the code
+  const hashedCode = crypto
     .createHash('sha256')
     .update(req.params.token)
     .digest('hex');
 
   const driver = await Driver.findOne({
-    passwordResetToken: hashedToken,
+    passwordResetToken: hashedCode,
     passwordResetExpires: { $gt: Date.now() },
   });
-  // 2) If token have not expired, and there is usr, set the new password
+  // 2) If code have not expired, and there is usr, set the new password
   if (!driver) {
-    return next(new AppError('Token is invalid or has expired', 400));
+    return next(new AppError('Code is invalid or has expired', 400));
   }
   driver.password = req.body.password;
   driver.passwordConfirm = req.body.passwordConfirm;

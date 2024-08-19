@@ -117,6 +117,7 @@ exports.resizeDriverPhoto = async (req, res) => {
     res.status(500).json({ message: 'Error resizing photo.', error });
   }
 };
+
 ////////////////////////////////////////////////////////////////////////
 /*
 //not yet

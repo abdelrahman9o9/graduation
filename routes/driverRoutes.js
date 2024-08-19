@@ -9,6 +9,7 @@ const {
 
 // Password management routes
 router.post('/forgotPassword', authController.forgotPassword);
+router.post('/verifyResetCode', authController.verifyResetCode);
 router.patch('/resetPassword/:token', authController.resetPassword);
 router.patch(
   '/updateMyPassword',
@@ -37,6 +38,6 @@ router.get(
 );
 
 // Ride management routes
-router.get('/availableRides', driverController.availableRides);
-router.get('/rideHistory', driverController.rideHistory);
+//router.get('/availableRides', driverController.availableRides);
+//router.get('/rideHistory', driverController.rideHistory);
 module.exports = router;

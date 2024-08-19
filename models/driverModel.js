@@ -93,19 +93,19 @@ driverSchema.methods.ChangedPasswordAfter = function (JWTTimestamp) {
 };
 
 driverSchema.methods.createPasswordResetToken = function () {
-  const resetToken = crypto.randomBytes(32).toString('hex');
+  // Generate a random 6-digit code
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
   this.passwordResetToken = crypto
     .createHash('sha256')
-    .update(resetToken)
+    .update(resetCode)
     .digest('hex');
-
-  console.log({ resetToken }, this.passwordResetToken);
 
   this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
 
-  return resetToken;
+  return resetCode;
 };
+
 const Driver = mongoose.model('Driver', driverSchema);
 
 module.exports = Driver;

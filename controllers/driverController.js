@@ -1,8 +1,12 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const Driver = require('../models/driverModel');
-const sharp = require('sharp');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('./../utils/appError');
+const sendEmail = require('./../utils/email');
+const multer = require('multer');
+const path = require('path');
+const Ride = require('../models/rideModel');
 
 const filterObj = (obj, ...allowedFields) => {
   const newObj = {};
@@ -15,29 +19,167 @@ const filterObj = (obj, ...allowedFields) => {
 exports.registerDriver = async (req, res) => {
   try {
     const { name, email, password, phone, passwordConfirm } = req.body;
-    if (!name || !email || !password || !phone) {
+
+    if (!name || !email || !password || !phone || !passwordConfirm) {
       return res
         .status(400)
-        .json({ message: 'Please provide all required fields.' });
+        .json({ message: 'Please provide all required fields correctly.' });
     }
 
-    const newDriver = await Driver.create({
+    // Create the driver
+    const driver = await Driver.create({
       name,
       email,
       phone,
       password,
       passwordConfirm,
+      isVerified: false,
     });
 
-    res.status(201).json({ status: 'success', data: { driver: newDriver } });
+    // Create verification token
+    const verificationToken = driver.createPasswordResetToken();
+    await driver.save({ validateBeforeSave: false });
+
+    // Send verification email
+    const emailOptions = {
+      email: driver.email,
+      subject: 'Verify Your Email',
+      message: `Your verification code is: ${verificationToken}`,
+    };
+
+    await sendEmail(emailOptions);
+
+    res.status(201).json({
+      status: 'success',
+      message:
+        'Account created successfully. Please check your email for the verification code.',
+      driverId: driver._id,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error registering driver.', error });
     console.log(error);
   }
 };
 
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'public/img/drivers');
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${file.fieldname}-${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({ storage });
+
+// Middleware to handle file uploads
+exports.uploadDriverDocuments = upload.fields([
+  { name: 'idCard', maxCount: 1 },
+  { name: 'driverLicense', maxCount: 1 },
+]);
+
+exports.addDriverLicense = async (req, res) => {
+  try {
+    const { token, licenseNumber, expirationDate, dateOfBirth } = req.body;
+
+    if (!token || !licenseNumber || !expirationDate || !dateOfBirth) {
+      return res
+        .status(400)
+        .json({ message: 'Please provide all required fields.' });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const driver = await Driver.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!driver) {
+      return res.status(400).json({ message: 'Invalid or expired token.' });
+    }
+
+    // Update driver fields
+    driver.licenseNumber = licenseNumber;
+    driver.expirationDate = expirationDate;
+    driver.dateOfBirth = dateOfBirth;
+
+    // Handle file uploads
+    if (req.files) {
+      if (req.files.idCard)
+        driver.idCard = `img/drivers/${req.files.idCard[0].filename}`;
+      if (req.files.driverLicense)
+        driver.driverLicense = `img/drivers/${req.files.driverLicense[0].filename}`;
+    }
+
+    await driver.save({ validateBeforeSave: false });
+
+    const verificationToken = driver.createPasswordResetToken();
+    await driver.save({ validateBeforeSave: false });
+
+    const emailOptions = {
+      email: driver.email,
+      subject: 'Verify Your Email',
+      message: `Your verification code is: ${verificationToken}`,
+    };
+
+    await sendEmail(emailOptions);
+
+    res.status(200).json({
+      status: 'success',
+      message:
+        'License details added successfully. Please check your email for the verification code.',
+    });
+  } catch (error) {
+    console.error('Error adding driver license:', error);
+    res.status(500).json({ message: 'Error adding driver license.', error });
+  }
+};
+
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { driverId, code } = req.body;
+
+    if (!driverId || !code) {
+      return res
+        .status(400)
+        .json({ message: 'Please provide the verification code.' });
+    }
+
+    const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
+
+    const driver = await Driver.findOne({
+      _id: driverId,
+      passwordResetToken: hashedCode,
+      passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!driver) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid or expired verification code.' });
+    }
+
+    driver.isVerified = true;
+    driver.passwordResetToken = undefined;
+    driver.passwordResetExpires = undefined;
+
+    await driver.save({ validateBeforeSave: false });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Email verified successfully. You can now log in.',
+    });
+  } catch (error) {
+    console.error('Error verifying email:', error);
+    res.status(500).json({ message: 'Error verifying email.', error });
+  }
+};
+
 exports.updateMe = catchAsync(async (req, res, next) => {
-  // 1) Create error if user POSTs password data
+  // 1) Create error if driver POSTs password data
   if (req.body.password || req.body.passwordConfirm) {
     return next(
       new AppError(
@@ -119,28 +261,99 @@ exports.resizeDriverPhoto = async (req, res) => {
 };
 
 ////////////////////////////////////////////////////////////////////////
-/*
-//not yet
-exports.rideHistory = async (req, res) => {
-  try {
-    const driver = await Driver.findById(req.driver.id).populate('rides');
-    if (!driver) {
-      return res.status(404).json({ message: 'Driver not found.' });
-    }
+// Start the ride
+exports.startRide = catchAsync(async (req, res, next) => {
+  const ride = await Ride.findOneAndUpdate(
+    {
+      _id: req.params.rideId,
+      status: 'booked',
+    },
+    {
+      status: 'upcoming',
+      startTime: new Date(), // Automatically record the start time
+    },
+    { new: true }
+  );
 
-    res.status(200).json({ status: 'success', data: { rides: driver.rides } });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching ride history.', error });
+  if (!ride) {
+    return next(
+      new AppError(
+        'No ride found with that ID or ride is not in a state that can be started',
+        404
+      )
+    );
   }
-};
 
-//not yet
-exports.availableRides = async (req, res) => {
-  try {
-    const rides = await Ride.find({ status: 'available' });
-    res.status(200).json({ status: 'success', data: { rides } });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching available rides.', error });
+  res.status(200).json({
+    status: 'success',
+    data: {
+      ride,
+    },
+  });
+});
+
+// End the ride
+exports.endRide = catchAsync(async (req, res, next) => {
+  const ride = await Ride.findOneAndUpdate(
+    {
+      _id: req.params.rideId,
+      status: 'upcoming',
+    },
+    {
+      status: 'completed',
+      endTime: new Date(), // Automatically record the end time
+    },
+    { new: true }
+  );
+
+  if (!ride) {
+    return next(
+      new AppError(
+        'No ride found with that ID or ride is not in a state that can be ended',
+        404
+      )
+    );
   }
-};
-*/
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      ride,
+    },
+  });
+});
+
+// Get driver completed rides
+exports.completedRides = catchAsync(async (req, res, next) => {
+  const completedRides = await Ride.find({
+    driver: req.driver._id,
+    status: 'completed',
+  })
+    .select('endLocation startTime')
+    .limit(10)
+    .skip(req.query.page * 10 || 0);
+
+  res.status(200).json({
+    status: 'success',
+    results: completedRides.length,
+    data: {
+      rides: completedRides,
+    },
+  });
+});
+
+// Get driver upcoming rides
+exports.upcomingRides = catchAsync(async (req, res, next) => {
+  const rides = await Ride.find({
+    driver: req.driver._id,
+    status: { $in: ['booked', 'upcoming'] },
+  });
+
+  res.status(200).json({
+    status: 'success',
+    results: rides.length,
+    data: {
+      rides,
+    },
+  });
+});

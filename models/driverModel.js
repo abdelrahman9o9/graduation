@@ -10,25 +10,25 @@ const driverSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: [true, 'p;ease provide a name'],
+    required: [true, 'Please provide a name'],
   },
   photo: String,
   email: {
     type: String,
-    required: [true, 'p;ease provide a email'],
+    required: [true, 'Please provide an email'],
     unique: true,
     lowercase: true,
-    validate: [validator.isEmail, 'please provide a valid email'],
+    validate: [validator.isEmail, 'Please provide a valid email'],
   },
   password: {
     type: String,
-    required: [true, 'p;ease provide a password'],
+    required: [true, 'Please provide a password'],
     minlength: 8,
     select: false,
   },
   phone: {
     type: String,
-    required: [true, 'p;ease provide a phone'],
+    required: [true, 'Please provide a phone number'],
     unique: true,
     minlength: 11,
   },
@@ -38,13 +38,12 @@ const driverSchema = new mongoose.Schema({
   },
   passwordConfirm: {
     type: String,
-    required: [true, 'please confirm your password'],
+    required: [true, 'Please confirm your password'],
     validate: {
-      //This only works on CRATE & SAVE !!
       validator: function (el) {
         return el === this.password;
       },
-      message: 'Password are not the same!',
+      message: 'Passwords are not the same!',
     },
   },
   passwordChangedAt: Date,
@@ -55,23 +54,36 @@ const driverSchema = new mongoose.Schema({
     default: true,
     select: false,
   },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  verificationToken: String,
+  verificationExpires: Date,
+  licenseNumber: String,
+  expirationDate: Date,
+  dateOfBirth: Date,
+  idCard: String,
+  driverLicense: String,
 });
 
+// Middleware to hash passwords before saving
 driverSchema.pre('save', async function (next) {
-  //only run this function if password was actually modified
+  // Only run this function if password was actually modified
   if (!this.isModified('password')) return next();
 
-  //Hash the password with cost of 12
+  // Hash the password with cost of 12
   this.password = await bcrypt.hash(this.password, 12);
 
   // Set passwordChangedAt to the current date and time
   this.passwordChangedAt = new Date();
 
-  //Delete passwordConfirmation field
+  // Delete passwordConfirmation field
   this.passwordConfirm = undefined;
   next();
 });
 
+// Method to compare passwords
 driverSchema.methods.correctPassword = async function (
   candidatePassword,
   driverPassword
@@ -79,6 +91,7 @@ driverSchema.methods.correctPassword = async function (
   return await bcrypt.compare(candidatePassword, driverPassword);
 };
 
+// Method to check if password was changed after token was issued
 driverSchema.methods.ChangedPasswordAfter = function (JWTTimestamp) {
   if (this.passwordChangedAt) {
     const changedTimestamp = parseInt(
@@ -88,10 +101,11 @@ driverSchema.methods.ChangedPasswordAfter = function (JWTTimestamp) {
     return JWTTimestamp < changedTimestamp;
   }
 
-  //False means Not changed
+  // False means not changed
   return false;
 };
 
+// Method to create a password reset token
 driverSchema.methods.createPasswordResetToken = function () {
   // Generate a random 6-digit code
   const resetCode = Math.floor(100000 + Math.random() * 900000).toString();

@@ -18,6 +18,14 @@ router.patch(
 );
 
 router.post('/register', driverController.registerDriver);
+router.post(
+  '/addDriverLicense',
+  driverController.uploadDriverDocuments,
+  driverController.addDriverLicense
+);
+
+router.post('/verify-email', driverController.verifyEmail);
+
 router.post('/login', authController.loginDriver);
 router.get('/logout', authController.logoutDriver);
 
@@ -38,6 +46,13 @@ router.get(
 );
 
 // Ride management routes
-//router.get('/availableRides', driverController.availableRides);
-//router.get('/rideHistory', driverController.rideHistory);
+
+// New routes for starting and completing rides
+router.patch('/startRide/:rideId', driverController.startRide);
+router.patch('/endRide/:rideId', driverController.endRide);
+
+// Upcoming and completed rides routes
+router.get('/upcomingRides', driverController.upcomingRides);
+router.get('/completedRides', driverController.completedRides);
+
 module.exports = router;

@@ -8,11 +8,14 @@ const { default: mongoose } = require('mongoose');
 const app = express();
 app.use(morgan('dev'));
 app.use(express.json());
+const path = require('path');
 
 // app.use('/', (req, res) => {
 //   res.send('Hello World !');
 // });
 // ROUTES
+app.use('/img', express.static(path.join(__dirname, 'public/img')));
+
 app.use('/user', userRoute);
 app.use('/driver', driverRoute);
 app.all('*', (req, res, next) => {

@@ -16,7 +16,7 @@ const filterObj = (obj, ...allowedFields) => {
   return newObj;
 };
 
-exports.registerDriver = async (req, res) => {
+exports.SignUpDriver = async (req, res) => {
   try {
     const { name, email, password, phone, passwordConfirm } = req.body;
 
@@ -56,7 +56,7 @@ exports.registerDriver = async (req, res) => {
       driverId: driver._id,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error registering driver.', error });
+    res.status(500).json({ message: 'Error SignUping driver.', error });
     console.log(error);
   }
 };
@@ -261,99 +261,3 @@ exports.resizeDriverPhoto = async (req, res) => {
 };
 
 ////////////////////////////////////////////////////////////////////////
-// Start the ride
-exports.startRide = catchAsync(async (req, res, next) => {
-  const ride = await Ride.findOneAndUpdate(
-    {
-      _id: req.params.rideId,
-      status: 'booked',
-    },
-    {
-      status: 'upcoming',
-      startTime: new Date(), // Automatically record the start time
-    },
-    { new: true }
-  );
-
-  if (!ride) {
-    return next(
-      new AppError(
-        'No ride found with that ID or ride is not in a state that can be started',
-        404
-      )
-    );
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      ride,
-    },
-  });
-});
-
-// End the ride
-exports.endRide = catchAsync(async (req, res, next) => {
-  const ride = await Ride.findOneAndUpdate(
-    {
-      _id: req.params.rideId,
-      status: 'upcoming',
-    },
-    {
-      status: 'completed',
-      endTime: new Date(), // Automatically record the end time
-    },
-    { new: true }
-  );
-
-  if (!ride) {
-    return next(
-      new AppError(
-        'No ride found with that ID or ride is not in a state that can be ended',
-        404
-      )
-    );
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      ride,
-    },
-  });
-});
-
-// Get driver completed rides
-exports.completedRides = catchAsync(async (req, res, next) => {
-  const completedRides = await Ride.find({
-    driver: req.driver._id,
-    status: 'completed',
-  })
-    .select('endLocation startTime')
-    .limit(10)
-    .skip(req.query.page * 10 || 0);
-
-  res.status(200).json({
-    status: 'success',
-    results: completedRides.length,
-    data: {
-      rides: completedRides,
-    },
-  });
-});
-
-// Get driver upcoming rides
-exports.upcomingRides = catchAsync(async (req, res, next) => {
-  const rides = await Ride.find({
-    driver: req.driver._id,
-    status: { $in: ['booked', 'upcoming'] },
-  });
-
-  res.status(200).json({
-    status: 'success',
-    results: rides.length,
-    data: {
-      rides,
-    },
-  });
-});
